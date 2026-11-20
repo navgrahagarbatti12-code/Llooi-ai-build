@@ -18,62 +18,50 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Join the two uploaded pieces of the outer ZIP.
-          test -s LOOI_AI_GitHub_Fixed_3_Files.part1
-          test -s LOOI_AI_GitHub_Fixed_3_Files.part2
-          cat LOOI_AI_GitHub_Fixed_3_Files.part1 LOOI_AI_GitHub_Fixed_3_Files.part2 > uploaded-package.zip
+          test -s "LOOI_AI_GitHub_Fixed_3_Files.part1"
+          test -s "LOOI_AI_GitHub_Fixed_3_Files.part2"
+
+          cat "LOOI_AI_GitHub_Fixed_3_Files.part1" "LOOI_AI_GitHub_Fixed_3_Files.part2" > uploaded-package.zip
           unzip -tq uploaded-package.zip
           mkdir outer
           unzip -q uploaded-package.zip -d outer
 
-          # Join the two original project archive pieces.
           PROJECT_DIR="outer/LOOI_AI_GitHub_Fixed"
           test -s "$PROJECT_DIR/LOOI_AI_Project.part1"
           test -s "$PROJECT_DIR/LOOI_AI_Project.part2"
+
           cat "$PROJECT_DIR/LOOI_AI_Project.part1" "$PROJECT_DIR/LOOI_AI_Project.part2" > project.zip
           unzip -tq project.zip
           mkdir extracted
           unzip -q project.zip -d extracted
 
-          # Confirm that all four original split APKs are present.
-          for apk in \\
-            base.apk \\
-            split_config.arm64_v8a.apk \\
-            split_config.en.apk \\
-            split_config.xxhdpi.apk
-          do
-            test -s "extracted/$apk"
-          done
+          test -s "extracted/base.apk"
+          test -s "extracted/split_config.arm64_v8a.apk"
+          test -s "extracted/split_config.en.apk"
+          test -s "extracted/split_config.xxhdpi.apk"
 
-      - name: Prepare unchanged APK package
+      - name: Create unchanged split APK package
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
-          cp extracted/base.apk release/
-          cp extracted/split_config.arm64_v8a.apk release/
-          cp extracted/split_config.en.apk release/
-          cp extracted/split_config.xxhdpi.apk release/
+          cp "extracted/base.apk" release/
+          cp "extracted/split_config.arm64_v8a.apk" release/
+          cp "extracted/split_config.en.apk" release/
+          cp "extracted/split_config.xxhdpi.apk" release/
 
           cat > release/INSTALL.txt <<'EOF'
           LOOI AI - original split APK package
 
-          The four APK files are copied unchanged. They are split APKs and
-          should be installed together, not one by one.
+          These APK files are copied unchanged. Install all four together
+          using a trusted split-APK installer, or with Android Debug Bridge:
 
-          Using Android Debug Bridge:
-            adb install-multiple base.apk split_config.arm64_v8a.apk split_config.en.apk split_config.xxhdpi.apk
-
-          On a phone, use a trusted split-APK installer and select all four
-          APK files in the same install session.
+          adb install-multiple base.apk split_config.arm64_v8a.apk split_config.en.apk split_config.xxhdpi.apk
           EOF
 
-          (cd release && zip -q ../LOOI-AI-APK-PACKAGE.zip \\
-            base.apk \\
-            split_config.arm64_v8a.apk \\
-            split_config.en.apk \\
-            split_config.xxhdpi.apk \\
-            INSTALL.txt)
+          cd release
+          zip -q ../LOOI-AI-APK-PACKAGE.zip base.apk split_config.arm64_v8a.apk split_config.en.apk split_config.xxhdpi.apk INSTALL.txt
+          cd ..
           unzip -tq LOOI-AI-APK-PACKAGE.zip
 
       - name: Upload packaged APKs
