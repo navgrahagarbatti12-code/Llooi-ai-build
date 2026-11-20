@@ -1,0 +1,106 @@
+name: Package LOOI AI APKs (unchanged)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Reassemble uploaded ZIP parts and project archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # These are the two halves of the outer ZIP package.
+          test -s LOOI_AI_GitHub_Fixed_3_Files.part1
+          test -s LOOI_AI_GitHub_Fixed_3_Files.part2
+          cat LOOI_AI_GitHub_Fixed_3_Files.part1 LOOI_AI_GitHub_Fixed_3_Files.part2 > uploaded-package.zip
+          unzip -tq uploaded-package.zip
+          mkdir outer
+          unzip -q uploaded-package.zip -d outer
+
+          # Find the two original project archive chunks inside the uploaded ZIP.
+          PROJECT_DIR="outer/LOOI_AI_GitHub_Fixed"
+          test -s "$PROJECT_DIR/LOOI_AI_Project.part1"
+          test -s "$PROJECT_DIR/LOOI_AI_Project.part2"
+          cat "$PROJECT_DIR/LOOI_AI_Project.part1" "$PROJECT_DIR/LOOI_AI_Project.part2" > project.zip
+          unzip -tq project.zip
+          mkdir extracted
+          unzip -q project.zip -d extracted
+
+          for apk in \
+            base.apk \
+            split_config.arm64_v8a.apk \
+            split_config.en.apk \
+            split_config.xxhdpi.apk
+          do
+            test -s "extracted/$apk"
+          done
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Verify APK signatures and prepare output package
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "build-tools;35.0.0"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+
+          mkdir -p release
+          cp extracted/base.apk release/
+          cp extracted/split_config.arm64_v8a.apk release/
+          cp extracted/split_config.en.apk release/
+          cp extracted/split_config.xxhdpi.apk release/
+
+          # Preserve original APK bytes, app name, package identity, and signatures.
+          for apk in release/*.apk; do
+            "$BT/apksigner" verify --verbose "$apk"
+          done
+
+          cat > release/INSTALL.txt <<'EOF'
+          LOOI AI - original split APK package
+
+          These APK files are preserved unchanged. Install all four together;
+          base.apk alone may not install correctly.
+
+          With Android Debug Bridge:
+            adb install-multiple base.apk split_config.arm64_v8a.apk split_config.en.apk split_config.xxhdpi.apk
+
+          On a phone, use a trusted split-APK installer and select all four files
+          in one install session. Do not install the split files one by one.
+          EOF
+
+          (cd release && zip -q ../LOOI-AI-APK-PACKAGE.zip \
+            base.apk \
+            split_config.arm64_v8a.apk \
+            split_config.en.apk \
+            split_config.xxhdpi.apk \
+            INSTALL.txt)
+          unzip -tq LOOI-AI-APK-PACKAGE.zip
+
+      - name: Upload packaged APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: LOOI-AI-APK-PACKAGE
+          path: |
+            LOOI-AI-APK-PACKAGE.zip
+            release/*.apk
+            release/INSTALL.txt
+          if-no-files-found: error
+          retention-days: 14
